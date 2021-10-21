@@ -1,0 +1,474 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <title>Journal Club - .BAM and .BAI in SeqAn3</title>
+
+        <link rel="stylesheet" href="reveal.js-3.9.2/css/reset.css">
+        <link rel="stylesheet" href="reveal.js-3.9.2/css/reveal.css">
+        <link rel="stylesheet" href="reveal.js-3.9.2/css/theme/white.css">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+
+        <!-- Theme used for syntax highlighting of code -->
+        <link rel="stylesheet" href="reveal.js-3.9.2/lib/css/zenburn.css">
+
+        <link rel="stylesheet" href="reveal.js-3.9.2/css/Chart.min.css">
+        <script src="reveal.js-3.9.2/js/Chart.min.js"></script>
+
+<style>
+.rrahn {
+    background: url('img/rrahn.jpg') no-repeat left top;
+    background-size: 2.5em 2.5em;
+    height: 2.5em;
+    padding-left: 3em;
+}
+.marehr {
+    /* background: url('img/marehr.jpg') no-repeat left top; */
+    background-size: 2.5em 2.5em;
+    height: 2.5em;
+    padding-left: 3em;
+}
+.slide-background::before {
+    content: "";
+    opacity: 1;
+    top: 0.3em;
+    left: 0;
+    height: 1.4em;
+    width: 100%;
+    position: absolute;
+    z-index: -1;
+
+    background-image: url(img/denbi.svg), url(img/fu.svg);
+    background-repeat: no-repeat, no-repeat;
+    background-position: 10%, 90% 0em;
+    background-size: auto 100%, auto 100%;
+}
+.backgrounds .slide-background:not(:first-child)::after {
+    content: "2021-03-17, Marcel Ehrhardt";
+    font-size: 0.75em;
+    opacity: 1;
+    bottom: 0.3em;
+    left: 0.5em;
+    height: 1.4em;
+    width: 100%;
+    position: absolute;
+    z-index: -1;
+
+    /* background-image: url(img/denbi.svg), url(img/mpi.svg), url(img/fu.svg);
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: 10% 0em, 50% 0em, 90% 0em;
+    background-size: auto 100%, auto 100%, auto 100%; */
+}
+.live-coding
+{
+    background: url(img/source_code.svg) no-repeat center;
+    background-size: 8em;
+    height: 6em;
+}
+.time-slot, .small
+{
+    font-size: 0.75em;
+}
+</style>
+
+<style>
+.reveal .slides section .fragment.grow-current,
+.reveal .slides section .fragment.highlight-darkgreen {
+    opacity: 1;
+    visibility: inherit;
+}
+
+.reveal .slides section .fragment.grow-current.current-fragment {
+    transform: scale( 1.3 );
+}
+
+.reveal .slides section .fragment.highlight-darkgreen.visible {
+    color: #03c03c;
+}
+
+.row {
+    display: flex;
+}
+
+.column {
+    flex: 50%; padding: 10px;
+}
+</style>
+
+        <!-- Printing and PDF exports -->
+        <script>
+            var link = document.createElement( 'link' );
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = window.location.search.match( /print-pdf/gi ) ? 'reveal.js-3.9.2/css/print/pdf.css' : 'reveal.js-3.9.2/css/print/paper.css';
+            document.getElementsByTagName( 'head' )[0].appendChild( link );
+        </script>
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+
+<section>
+<h1>Journal Club</h1>
+<h3>.BAM and .BAI<br> in SeqAn3</h3>
+
+<!-- <p class='rrahn' style='text-align: left'> René Rahn (Max Planck Institute for Molecular Genetics)</p> -->
+<p class='marehr' style='text-align: left'> Marcel Ehrhardt (Free University Berlin)</p>
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section> <!-- definitions - begin -->
+<section>
+<h6> BAM Format </h6>
+
+<div class="row">
+
+<div class="fragment column">
+<img src="img/general_mapping.svg" alt="" width="100%"/>
+</div>
+
+<div class="column">
+
+<ul>
+<li class="fragment">pos: 32bit,<br>|ref. sequence| &lt; 4GiB</li>
+<li class="fragment">l_seq: 32bit,<br>|read| &lt; 4 GiB</li>
+<li class="fragment">read 4bit encoded IUPAC (with gap <code>=</code>)</li>
+</ul>
+</div>
+<!-- =ACMGRSVTWYHKDBN -->
+<!-- -ACMGRSVTWYHKDBN -->
+</div>
+
+<ul>
+<li class="fragment">n_cigar_op: 16bit, <code>100M 20I</code>, |cigar ops|&lt; 65536</li>
+<li class="fragment">cigar_op: 32bit, 4bit for (I,M,…), 28bit for length</li>
+<li class="fragment">BAI index (bin): 16bit, whereas in .BAI has 32bit</li>
+</ul>
+
+</section>
+<section>
+<h6> BAM Format II </h6>
+
+<iframe src="https://samtools.github.io/hts-specs/SAMv1.pdf#page=15" title="" width="100%" height="500px"></iframe>
+
+</section>
+
+ <!-- definitions -->
+</section> <!-- definitions - end -->
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<h6>BAM File</h6>
+
+<img src="img/bam_file.svg" alt="" width="100%"/>
+
+<ul>
+<li class="fragment">each block "special" gzip-Block</li>
+<li class="fragment">uncompressed data < 64KiB</li>
+<li class="fragment">Bam Format specified on (gunzip/bgunzip) Bamfile
+    <ul><li><code>bgzf -c -d my.bam &gt; my.bam.raw</code></li></ul>
+</li>
+<li class="fragment">convert sam to bam
+    <ul><li><code>samtools view -bS my.sam > my.bam</code></li></ul>
+</li>
+</ul>
+
+</section>
+
+<section>
+<h6>BAM File II</h6>
+
+<img src="img/bam_file.svg" alt="" width="100%"/>
+
+Observations:
+<ul>
+<li class="fragment">samtools seem to start always a new block with an alignment
+    <ul><li>=> suspect to fragmentation?</li></ul>
+</li>
+</ul>
+
+</section>
+
+<section>
+<h6>BAM File III</h6>
+
+<iframe src="https://samtools.github.io/hts-specs/SAMv1.pdf#page=13" title="" width="100%" height="500px"></iframe>
+
+</section>
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<img src="img/general_mapping2.svg" alt="" width="100%"/>
+<h6>From here on all figures only depict a read via the mapped length in the reference</h6>
+</section>
+
+<section>
+<h6>What interval queries can we answer?</h6>
+
+<img src="img/interval_query.svg" alt="" width="400px"/>
+
+<ul>
+<li class="fragment">reads contained in an interval, $\mathcal O(n\_cigar\_op)$</li>
+<li class="fragment">reads intersecting an interval, $\mathcal O(n\_cigar\_op)$</li>
+<li class="fragment">reads starting in an interval (rays), $\mathcal O(1)^*$</li>
+</ul>
+
+</section>
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<h6>Indexing BAM (.BAI)</h6>
+
+<ul>
+<li class="fragment">BAM must be sorted by<br>(reference_id, left-most coordinate <code>pos</code>)</li>
+<li class="fragment">.CSI is a different index file, but similar to .BAI</li>
+<li class="fragment">based on UCSC binning</li>
+<li class="fragment">.BAI only allows |reference sequence|s < 512MiB</li>
+</ul>
+
+</section>
+
+<section>
+<h6>.BAI Main-Idea</h6>
+
+
+<img src="img/bai_binning.svg" alt="" width="100%"/>
+
+<ul>
+<li class="fragment">Have multiple bins that span a (different) region</li>
+<li class="fragment">Put alignment in smallest containing bin</li>
+</ul>
+
+</section>
+
+<section>
+<img src="img/bai_binning2.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<img src="img/bai_binning3.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<img src="img/bai_binning4.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<img src="img/bai_binning5.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<iframe src="https://samtools.github.io/hts-specs/SAMv1.pdf#page=18" title="" width="100%" height="500px"></iframe>
+</section>
+
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<h6>.BAI Interval-Query</h6>
+
+<img src="img/bai_binning5.5.svg" alt="" width="100%"/>
+
+<ul>
+<li class="fragment">All alignments within a bin are completely contained.</li>
+<!-- <ul> -->
+<li class="fragment">reads contained in a bin <ul><li>just look in smallest enclosing bin</li></ul></li>
+<li class="fragment">reads contained in an interval, somehow efficient</li>
+<li class="fragment">reads intersecting an interval, not efficient</li>
+<!-- </ul> -->
+</ul>
+
+</section>
+
+<section>
+<img src="img/bai_binning6.svg" alt="" width="100%"/>
+</section>
+
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<h6>.BAI Aux. Structure</h6>
+
+<img src="img/bai_binning5.5.svg" alt="" width="100%"/>
+
+<ul>
+<li class="fragment">Offers a aux. data structure that stores</li>
+<!-- <ul> -->
+<li class="fragment">for each bin in the last level</li>
+<li class="fragment">the left most overlapping alignment</li>
+<!-- </ul> -->
+</ul>
+
+</section>
+
+<section>
+<img src="img/bai_binning7.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<img src="img/bai_binning8.svg" alt="" width="100%"/>
+</section>
+
+<section>
+<img src="img/bai_binning9.svg" alt="" width="100%"/>
+</section>
+</section>
+
+<!-- =============================================================================================================== -->
+
+<section>
+<section>
+<h6>Okay, but what does a .BAI file store?</h6>
+
+<img src="img/bai_binning5.5.svg" alt="" width="100%"/>
+
+<span class="fragment">From what I have seen,</span>
+<ul>
+<li class="fragment">bins only contain a single alignment (left-most).</li>
+<!-- <ul> -->
+<li class="fragment">bins might be merged into a single bin. <br>=> reads contained in a bin, isn't actually trivial</li>
+<!-- </ul> -->
+</ul>
+
+</section>
+
+<section>
+<h6>Okay, but what does a .BAI file store?</h6>
+
+<img src="img/bai_binning5.5.svg" alt="" width="100%"/>
+<img src="img/bam_file.svg" alt="" width="100%"/>
+
+<ul>
+<li class="fragment">the reference sequence interval isn't stored.</li>
+<li class="fragment">only the file "voffset".</li>
+</ul>
+
+</section>
+</section>
+
+<!-- =============================================================================================================== -->
+
+
+<section> <!-- wrap_up - end -->
+
+<section data-markdown>
+<textarea data-template>
+###### Summary!
+
+<ul>
+<li class="fragment">reads contained in an interval, $\mathcal O(n\_cigar\_op)$
+<ul>
+    <li class="fragment">in theory guided by binning</li>
+    <li class="fragment">in practice can be "inefficient"<br>(at-most one alignment in bin)</li>
+</ul>
+</li>
+<li class="fragment">reads intersecting an interval, $\mathcal O(n\_cigar\_op)$</li>
+<li class="fragment">reads starting in an interval (rays), $\mathcal O(1)^*$</li>
+</ul>
+
+</textarea>
+</section> <!-- wrap_up -->
+
+<section>
+<p><a href="https://twitter.com/seqanlib"><i class="fa fa-twitter" aria-hidden="true"></i> @SeqAnLib</a></p>
+<p><a href="https://github.com/seqan/"><i class="fa fa-github" aria-hidden="true"></i> github/seqan</a></p>
+<p><a href="https://www.seqan.de"><i class="fa fa-globe" aria-hidden="true"></i> seqan.de</a></p>
+`$\pi$`
+</section> <!-- wrap_up -->
+
+</section> <!-- wrap_up - end -->
+<!-- =============================================================================================================== -->
+            </div>
+        </div>
+
+        <script src="reveal.js-3.9.2/js/reveal.js"></script>
+
+        <script>
+            // More info about config & dependencies:
+            // - https://github.com/hakimel/reveal.js#configuration
+            // - https://github.com/hakimel/reveal.js#dependencies
+            Reveal.initialize({
+                hash: true,
+                dependencies: [
+                    { src: 'reveal.js-3.9.2/plugin/markdown/marked.js' },
+                    { src: 'reveal.js-3.9.2/plugin/markdown/markdown.js' },
+                    // { src: 'reveal.js-3.9.2/plugin/highlight/highlight.js' },
+                    { src: 'reveal.js-3.9.2/plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+                    { src: 'reveal.js-3.9.2/plugin/notes/notes.js', async: true },
+                    { src: 'reveal.js-3.9.2/plugin/math/math.js', async: true }
+                ]
+            });
+        </script>
+
+        <script>
+        var myChart = new Chart(document.getElementById('fasta_benchmark'), {
+            type: 'bar',
+            data: {
+                labels: ['seqan3_dna5_write', 'seqan2_dna5_write', 'seqan3_dna5_read', 'seqan2_dna5_read', 'seqan2_char_read'/*, 'seqan3_nio_char_read'*/],
+                datasets: [{
+                    label: 'Read / write speed (MiB/s)',
+                    data: [905.8, 133.416, 511.179, 709.482, 905.497/*, 2216.82688*/],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    xAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Fasta file with 1024 records of size |id|=18 and |sequence|=79 characters (without wraparound)'
+                            }
+                    }],
+                    yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'MiB/s'
+                            }
+                    }],
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Fasta benchmarks'
+                }
+            }
+        });
+        </script> <!-- fasta_parsing -->
+    </body>
+</html>
